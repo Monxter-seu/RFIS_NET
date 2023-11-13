@@ -20,6 +20,7 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 from g_mlp import gMLP
+from g_mlp import mixNet
 from pit_criterion import new_loss
 from data import MyDataLoader, MyDataset
 
@@ -41,35 +42,37 @@ if __name__ == "__main__":
     # reader = csv.reader(file)
     # row = next(reader)
     # tensor_read = torch.from_numpy(np.array(row, dtype=np.float32))
-    N = 128
-    L = 20
-    B = 128
-    H = 32
-    P = 3
-    X = 8
-    R = 2
-    norm_type = 'gLN'
-    causal = 0
-    mask_nonlinear = 'relu'
-    C = 2
+    # N = 1
+    # L = 20
+    # B = 128
+    # H = 32
+    # P = 3
+    # X = 8
+    # R = 2
+    # norm_type = 'gLN'
+    # causal = 0
+    # mask_nonlinear = 'relu'
+    # C = 2
+    M, N, L, T = 16, 1, 20, 12
+    B, H, P, X, R, C, norm_type, causal = 128, 32, 3, 8, 2, 2, "gLN", False
 
     # 实例化模型
 
-    model = gMLP(N, L, B, H, P, X, R, C, norm_type=norm_type)
+    model = mixNet(N, B, H, P, X, R, C, 128).cuda()
     model = model.cuda()
 
     # 定义损失函数和优化器
     # criterion = new_loss()
-    optimizer = optim.Adam(model.parameters(), lr=0.00001)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     train_dataset = MyDataset('D:\\frequencyProcess\\testout\\tr\\', batch_size=16)
     train_loader = MyDataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=4)
     cv_dataset = MyDataset('D:\\frequencyProcess\\testout\\tt\\', batch_size=16)
     cv_loader = MyDataLoader(cv_dataset, batch_size=1, shuffle=True, num_workers=4)
-    test_dataset = MyDataset('D:\\Process\\testout\\cv\\', batch_size=16)
+    test_dataset = MyDataset('D:\\frequencyProcess\\testout\\cv\\', batch_size=16)
     test_loader = MyDataLoader(test_dataset, batch_size=1, shuffle=True, num_workers=4)
     # 训练模型
-    num_epochs = 30
+    num_epochs = 120
     for epoch in range(num_epochs):
         # 训练模式
         #start_time = time.time()
@@ -84,9 +87,10 @@ if __name__ == "__main__":
             # 将数据和标签转换为张量
             data = data.cuda()
             labels =labels.cuda()
-
+            #print(data.shape)
             # 向前传递
             outputs = model(data)
+            #print('11111111111111')
             loss = new_loss(outputs, labels)
 
             # 反向传播和优化

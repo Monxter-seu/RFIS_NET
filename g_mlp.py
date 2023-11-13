@@ -17,12 +17,12 @@ EPS = 1e-8
 class mixNet(nn.Module):
     def __init__(self, N, B, H, P, X, R, C, K, norm_type="gLN", causal=False,
                  mask_nonlinear='relu'):
-        super(mixNet, self).__init()
+        super(mixNet, self).__init__()
         self.N, self.B, self.H, self.P, self.X, self.R, self.C, self.K = N, B, H, P, X, R, C, K
         self.norm_type = norm_type
         self.causal = causal
         self.mask_nonlinear = mask_nonlinear
-        self.separator = EditedNet(N, B, H, P, X, R, C, K,norm_type, causal, mask_nonlinear)
+        self.net = EditedNet(N, B, H, P, X, R, C, K,norm_type, causal, mask_nonlinear)
 
         self.classifier0 = BinaryClassifier(128)
         self.classifier1 = MultiClassifier(0, 128)
@@ -33,11 +33,12 @@ class mixNet(nn.Module):
 
 
     def forward(self, mixture):
-        mixture = separator(mixture)
+        mixture = mixture.unsqueeze(1)
+        mixture_1 = self.net(mixture)
         #[bs,2,1,128]
-        mixture = mixture.squeeze(dim=2)
-        channel_0 = mixture[:, 0, :]
-        channel_1 = mixture[:, 1, :]
+        mixture_2 = mixture_1.squeeze(dim=2)
+        channel_0 = mixture_2[:, 0, :]
+        channel_1 = mixture_2[:, 1, :]
         classifier_output0 = self.classifier0(channel_0)
         classifier_output1 = self.classifier1(channel_1)
         combined_classifier_output = torch.cat((classifier_output0, classifier_output1), dim=1)
@@ -284,26 +285,32 @@ class EditedNet(nn.Module):
         """
         super(EditedNet, self).__init__()
         # Hyper-parameter
+        self.N = N
+        self.B = B
+        self.H = H
+        self.P = P
+        self.X = X
+        self.R = R
         self.C = C
         self.mask_nonlinear = mask_nonlinear
         self.K=K
         # Components
         # [M, N, K] -> [M, N, K]
-        layer_norm = ChannelwiseLayerNorm(N)
+        self.layer_norm = ChannelwiseLayerNorm(N)
         # [M, N, K] -> [M, B, K]
-        bottleneck_conv1x1 = nn.Conv1d(N, B, 1, bias=False)
+        self.bottleneck_conv1x1 = nn.Conv1d(N, B, 1, bias=False)
         # [M, B, K] -> [M, B, K]
         
         
-        coreNet = gMLP_core(num_tokens=N,len_sen=B,dim=K,d_ff=1024,num_layers=8)
+        self.coreNet = gMLP_core(num_tokens=N,len_sen=B,dim=K,d_ff=1024,num_layers=8)
 
         # [M, B, K] -> [M, C*N, K]
-        mask_conv1x1 = nn.Conv1d(B, C*N, 1, bias=False)
+        self.mask_conv1x1 = nn.Conv1d(B, C*N, 1, bias=False)
         # Put together
-        self.network = nn.Sequential(layer_norm,
-                                     bottleneck_conv1x1,
-                                     coreNet,
-                                     mask_conv1x1)
+        self.network = nn.Sequential(self.layer_norm,
+                                     self.bottleneck_conv1x1,
+                                     self.coreNet,
+                                     self.mask_conv1x1)
 
     def forward(self, mixture_w):
         """
@@ -313,10 +320,9 @@ class EditedNet(nn.Module):
         returns:
             est_mask: [M, C, N, K]
         """
-        print('mixture_w===',mixture_w.shape)
         M, N, K = mixture_w.size()
-        score = self.network(mixture_w)  # [M, N, K] -> [M, C*N, K]
-        print('score.shape====',score.shape)
+        score = self.network(mixture_w)
+        #score = self.network(mixture_w)  # [M, N, K] -> [M, C*N, K]
         score = score.view(M, self.C, N, K) # [M, C*N, K] -> [M, C, N, K]
         if self.mask_nonlinear == 'softmax':
             est_mask = F.softmax(score, dim=1)
@@ -468,41 +474,32 @@ class MultiClassifier(nn.Module):
 if __name__ == '__main__':
     
     torch.manual_seed(123)
-    M, N, L, T = 2, 1, 4, 12
+    M, N, L, T = 16, 1, 4, 12
     K = 2*T//L-1
     B, H, P, X, R, C, norm_type, causal = 1, 3, 3, 3, 2, 2, "gLN", False
-    mixture = torch.randint(3, (M, T), dtype=torch.float)
-    # test Encoder
-    encoder = Encoder(L, N)
-    encoder.conv1d_U.weight.data = torch.randint(2, encoder.conv1d_U.weight.size(), dtype=torch.float)
-    with torch.no_grad():
-        mixture_w = encoder(mixture)
-    print('mixture', mixture)
-    print('U', encoder.conv1d_U.weight)
-    print('mixture_w', mixture_w)
-    print('mixture_w size', mixture_w.size())
+    # mixture = torch.randint(3, (M, T), dtype=torch.float)
+    # # test Encoder
+    # encoder = Encoder(L, N)
+    # encoder.conv1d_U.weight.data = torch.randint(2, encoder.conv1d_U.weight.size(), dtype=torch.float)
+    # with torch.no_grad():
+        # mixture_w = encoder(mixture)
+    # print('mixture', mixture)
+    # print('U', encoder.conv1d_U.weight)
+    # print('mixture_w', mixture_w)
+    # print('mixture_w size', mixture_w.size())
 
     num_tokens=100
-    bs=4
+    bs=16
     #test
     len_sen=64000
     num_layers=6
     input = torch.randint(num_tokens, (bs, len_sen), dtype=torch.float).cuda() #bs,len_sen
 
-    print('input.shape==',input.shape)
-    gmlp = gMLP(N, L, B, H, P, X, R, C, norm_type=norm_type).cuda()
-    output = gmlp(input)
-    print('output.shape==',output.shape)
-    print(output)
-    splited_outputs0 = output[:, 0].unsqueeze(1)
-    splited_outputs1 = output[:, 1:6]
-    print(splited_outputs0)
-    print(splited_outputs0.shape)
-    print(splited_outputs1.shape)
     # g = make_dot(output.mean(), params=dict(gmlp.named_parameters()), show_attrs=True, show_saved=True)
     # g = make_dot(output.mean())
     # g.view()
-    se_input = torch.randint(100, (bs,1,128),dtype=torch.float).cuda()
+    se_input = torch.randint(100, (bs,128),dtype=torch.float).cuda()
+    print(se_input.shape)
     separator = mixNet(N, B, H, P, X, R, C, 128).cuda()
     out = separator(se_input)
-    print('out.shape====',out.shape)
+    print('out.shape====',out)
