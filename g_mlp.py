@@ -14,6 +14,8 @@ from utils import overlap_and_add
 
 EPS = 1e-8
 
+class mixNet(nn.Module):
+    def __init__(self, 
 
 class gMLP(nn.Module):
     def __init__(self, N, L, B, H, P, X, R, C, norm_type="gLN", causal=False,
@@ -76,8 +78,9 @@ class gMLP(nn.Module):
         mixture_w = self.encoder(mixture)
         """通过separation网络计算mask
         """
-
+        print('mixture_w.shape======',mixture_w.shape)
         est_mask = self.separator(mixture_w)
+        print('est_mask.shape=====',est_mask.shape)
         """经过decoder得到原信号
         """
 
@@ -265,7 +268,7 @@ class EditedNet(nn.Module):
         # [M, B, K] -> [M, B, K]
         
         
-        coreNet = gMLP_core(num_tokens=N,len_sen=B,dim=K,d_ff=1024,num_layers=10)
+        coreNet = gMLP_core(num_tokens=N,len_sen=B,dim=K,d_ff=1024,num_layers=8)
 
         # [M, B, K] -> [M, C*N, K]
         mask_conv1x1 = nn.Conv1d(B, C*N, 1, bias=False)
@@ -283,8 +286,10 @@ class EditedNet(nn.Module):
         returns:
             est_mask: [M, C, N, K]
         """
+        print('mixture_w===',mixture_w.shape)
         M, N, K = mixture_w.size()
         score = self.network(mixture_w)  # [M, N, K] -> [M, C*N, K]
+        print('score.shape====',score.shape)
         score = score.view(M, self.C, N, K) # [M, C*N, K] -> [M, C, N, K]
         if self.mask_nonlinear == 'softmax':
             est_mask = F.softmax(score, dim=1)
@@ -436,9 +441,9 @@ class MultiClassifier(nn.Module):
 if __name__ == '__main__':
     
     torch.manual_seed(123)
-    M, N, L, T = 2, 3, 4, 12
+    M, N, L, T = 2, 1, 4, 12
     K = 2*T//L-1
-    B, H, P, X, R, C, norm_type, causal = 2, 3, 3, 3, 2, 2, "gLN", False
+    B, H, P, X, R, C, norm_type, causal = 1, 3, 3, 3, 2, 2, "gLN", False
     mixture = torch.randint(3, (M, T), dtype=torch.float)
     # test Encoder
     encoder = Encoder(L, N)
@@ -467,6 +472,10 @@ if __name__ == '__main__':
     print(splited_outputs0)
     print(splited_outputs0.shape)
     print(splited_outputs1.shape)
-    #g = make_dot(output.mean(), params=dict(gmlp.named_parameters()), show_attrs=True, show_saved=True)
-    g = make_dot(output.mean())
-    g.view()
+    # g = make_dot(output.mean(), params=dict(gmlp.named_parameters()), show_attrs=True, show_saved=True)
+    # g = make_dot(output.mean())
+    # g.view()
+    se_input = torch.randint(100, (bs,1,128),dtype=torch.float).cuda()
+    separator = EditedNet(N, B, H, P, X, R, C, 128).cuda()
+    out = separator(se_input)
+    print('out.shape====',out.shape)

@@ -62,11 +62,11 @@ if __name__ == "__main__":
     # criterion = new_loss()
     optimizer = optim.Adam(model.parameters(), lr=0.00001)
 
-    train_dataset = MyDataset('D:\\csvProcess\\testout\\tr\\', batch_size=16)
+    train_dataset = MyDataset('D:\\frequencyProcess\\testout\\tr\\', batch_size=16)
     train_loader = MyDataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=4)
-    cv_dataset = MyDataset('D:\\csvProcess\\testout\\tt\\', batch_size=16)
+    cv_dataset = MyDataset('D:\\frequencyProcess\\testout\\tt\\', batch_size=16)
     cv_loader = MyDataLoader(cv_dataset, batch_size=1, shuffle=True, num_workers=4)
-    test_dataset = MyDataset('D:\\csvProcess\\testout\\cv\\', batch_size=16)
+    test_dataset = MyDataset('D:\\Process\\testout\\cv\\', batch_size=16)
     test_loader = MyDataLoader(test_dataset, batch_size=1, shuffle=True, num_workers=4)
     # 训练模型
     num_epochs = 30
