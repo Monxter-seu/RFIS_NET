@@ -15,7 +15,34 @@ from utils import overlap_and_add
 EPS = 1e-8
 
 class mixNet(nn.Module):
-    def __init__(self, 
+    def __init__(self, N, B, H, P, X, R, C, K, norm_type="gLN", causal=False,
+                 mask_nonlinear='relu'):
+        super(mixNet, self).__init()
+        self.N, self.B, self.H, self.P, self.X, self.R, self.C, self.K = N, B, H, P, X, R, C, K
+        self.norm_type = norm_type
+        self.causal = causal
+        self.mask_nonlinear = mask_nonlinear
+        self.separator = EditedNet(N, B, H, P, X, R, C, K,norm_type, causal, mask_nonlinear)
+
+        self.classifier0 = BinaryClassifier(128)
+        self.classifier1 = MultiClassifier(0, 128)
+        # init
+        for p in self.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_normal_(p)
+
+
+    def forward(self, mixture):
+        mixture = separator(mixture)
+        #[bs,2,1,128]
+        mixture = mixture.squeeze(dim=2)
+        channel_0 = mixture[:, 0, :]
+        channel_1 = mixture[:, 1, :]
+        classifier_output0 = self.classifier0(channel_0)
+        classifier_output1 = self.classifier1(channel_1)
+        combined_classifier_output = torch.cat((classifier_output0, classifier_output1), dim=1)
+        return combined_classifier_output
+
 
 class gMLP(nn.Module):
     def __init__(self, N, L, B, H, P, X, R, C, norm_type="gLN", causal=False,
@@ -382,13 +409,13 @@ class BinaryClassifier(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        group_s = 500
-        x = x.reshape(x.size(0), group_s, -1)
-        # 对第二个维度执行FFT
-        x = torch.fft.fftn(x, dim=2)
-        x = torch.abs(x)
-        # 计算形状为[B,n, 128]的张量的平均值
-        x = torch.mean(x, dim=1)
+        # group_s = 500
+        # x = x.reshape(x.size(0), group_s, -1)
+        # # 对第二个维度执行FFT
+        # x = torch.fft.fftn(x, dim=2)
+        # x = torch.abs(x)
+        # # 计算形状为[B,n, 128]的张量的平均值
+        # x = torch.mean(x, dim=1)
         # 应用第一个全连接层和ReLU激活函数
         x = self.fc1(x)
         x = self.relu(x)
@@ -416,18 +443,18 @@ class MultiClassifier(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        # 应用第一个全连接层和ReLU激活函数
-        group_num = self.length // self.group_size
-        num_elements = group_num * self.group_size
-
-        # 将张量重塑为形状为[B,n, 128]的张量
-        x = x.reshape(x.size(0), group_num, -1)
-
-        # 对第二个维度执行FFT
-        x = torch.fft.fftn(x, dim=2)
-        x = torch.abs(x)
-        # 计算形状为[B,n, 128]的张量的平均值
-        x = torch.mean(x, dim=1)
+        # # 应用第一个全连接层和ReLU激活函数
+        # group_num = self.length // self.group_size
+        # num_elements = group_num * self.group_size
+        #
+        # # 将张量重塑为形状为[B,n, 128]的张量
+        # x = x.reshape(x.size(0), group_num, -1)
+        #
+        # # 对第二个维度执行FFT
+        # x = torch.fft.fftn(x, dim=2)
+        # x = torch.abs(x)
+        # # 计算形状为[B,n, 128]的张量的平均值
+        # x = torch.mean(x, dim=1)
         x = self.fc1(x)
         x = self.relu(x)
         # 应用第二个全连接层和ReLU激活函数
@@ -476,6 +503,6 @@ if __name__ == '__main__':
     # g = make_dot(output.mean())
     # g.view()
     se_input = torch.randint(100, (bs,1,128),dtype=torch.float).cuda()
-    separator = EditedNet(N, B, H, P, X, R, C, 128).cuda()
+    separator = mixNet(N, B, H, P, X, R, C, 128).cuda()
     out = separator(se_input)
     print('out.shape====',out.shape)
