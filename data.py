@@ -81,18 +81,20 @@ def _collate_fn(batch):
         sources_pad: B x C x T, torch.Tensor
     """
     # batch should be located in list
-    assert len(batch) == 1
+    #assert len(batch) == 1
     mixtures, label = load_mixtures_and_labels(batch[0])
 
     # get batch of lengths of input sequences
     #ilens = np.array([mix.shape[0] for mix in mixtures])
 
     # perform padding and convert to tensor
-    pad_value = 0
+    # pad_value = 0
     mixtures_pad = torch.from_numpy(mixtures).float()
     #ilens = torch.from_numpy(ilens)
+    print('mixtures_pad==',mixtures_pad)
 
     label_tensor = torch.from_numpy(label).float()
+    print('label_tensors==',label_tensor)
     return mixtures_pad, label_tensor
 
 
@@ -223,83 +225,6 @@ def _collate_fn(batch):
 #     return mixtures_pad, ilens, sources_pad
 
 
-# Eval data part
-from preprocess import preprocess_one_dir
-
-class EvalDataset(data.Dataset):
-
-    def __init__(self, mix_dir, mix_json, batch_size, sample_rate=8000):
-        """
-        Args:
-            mix_dir: directory including mixture wav files
-            mix_json: json file including mixture wav files
-        """
-        super(EvalDataset, self).__init__()
-        assert mix_dir != None or mix_json != None
-        if mix_dir is not None:
-            # Generate mix.json given mix_dir
-            preprocess_one_dir(mix_dir, mix_dir, 'mix',
-                               sample_rate=sample_rate)
-            mix_json = os.path.join(mix_dir, 'mix.json')
-        with open(mix_json, 'r') as f:
-            mix_infos = json.load(f)
-        # sort it by #samples (impl bucket)
-        def sort(infos): return sorted(
-            infos, key=lambda info: int(info[1]), reverse=True)
-        sorted_mix_infos = sort(mix_infos)
-        # generate minibach infomations
-        minibatch = []
-        start = 0
-        while True:
-            end = min(len(sorted_mix_infos), start + batch_size)
-            minibatch.append([sorted_mix_infos[start:end],
-                              sample_rate])
-            if end == len(sorted_mix_infos):
-                break
-            start = end
-        self.minibatch = minibatch
-
-    def __getitem__(self, index):
-        return self.minibatch[index]
-
-    def __len__(self):
-        return len(self.minibatch)
-
-
-class EvalDataLoader(data.DataLoader):
-    """
-    NOTE: just use batchsize=1 here, so drop_last=True makes no sense here.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super(EvalDataLoader, self).__init__(*args, **kwargs)
-        self.collate_fn = _collate_fn_eval
-
-
-def _collate_fn_eval(batch):
-    """
-    Args:
-        batch: list, len(batch) = 1. See AudioDataset.__getitem__()
-    Returns:
-        mixtures_pad: B x T, torch.Tensor
-        ilens : B, torch.Tentor
-        filenames: a list contain B strings
-    """
-    # batch should be located in list
-    assert len(batch) == 1
-    mixtures, filenames = load_mixtures(batch[0])
-
-    # get batch of lengths of input sequences
-    ilens = np.array([mix.shape[0] for mix in mixtures])
-
-    # perform padding and convert to tensor
-    pad_value = 0
-    mixtures_pad = pad_list([torch.from_numpy(mix).float()
-                             for mix in mixtures], pad_value)
-    ilens = torch.from_numpy(ilens)
-    return mixtures_pad, ilens, filenames
-
-
 # ------------------------------ utils ------------------------------------
 def load_mixtures_and_sources(batch):
     """
@@ -371,7 +296,9 @@ def load_mixtures_and_labels(batch):
     # for each utterance
     for mix_info in mix_infos:
         mix_path = mix_info[0]
+        print('mix_path==',mix_path)
         label_list = mix_info[1]
+        print('label_list==',label_list)
         # read wav file
         row = np.loadtxt(mix_path, delimiter=",", dtype=np.float32)
         mixtures.append(row)
@@ -392,11 +319,20 @@ def pad_list(xs, pad_value):
 if __name__ == "__main__":
     #import sys
     #json_dir, batch_size = sys.argv[1:3]
-    dataset = MyDataset('D:\\csvProcess\\testout\\tr\\', 10)
-    data_loader = MyDataLoader(dataset, batch_size=1,
+    dataset = MyDataset('D:\\frequencyProcess\\testout\\tr\\', 16)
+    data_loader = MyDataLoader(dataset, batch_size=1,shuffle=True,
                                   num_workers=4)
     print('data_set_len===', len(dataset))
     print('data_loader===', data_loader)
+    for i, batch in enumerate(data_loader):
+        mixtures, lens = batch
+        print(i)
+        print(mixtures.size())
+        #print(labels.size())
+        print(lens)
+        if i < 10:
+            print(mixtures)
+            #print(labels)
     for i, batch in enumerate(data_loader):
         mixtures, lens = batch
         print(i)

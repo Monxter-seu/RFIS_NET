@@ -8,22 +8,26 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import time
-from torchviz import make_dot
 
+from torchviz import make_dot
+from conv_tasnet import TemporalConvNet
 from utils import overlap_and_add
 
 EPS = 1e-8
+NET = 'transformer'
 
-class mixNet(nn.Module):
+class maskNet(nn.Module):
     def __init__(self, N, B, H, P, X, R, C, K, norm_type="gLN", causal=False,
                  mask_nonlinear='relu'):
-        super(mixNet, self).__init__()
+        super(maskNet, self).__init__()
         self.N, self.B, self.H, self.P, self.X, self.R, self.C, self.K = N, B, H, P, X, R, C, K
         self.norm_type = norm_type
         self.causal = causal
         self.mask_nonlinear = mask_nonlinear
-        self.net = EditedNet(N, B, H, P, X, R, C, K,norm_type, causal, mask_nonlinear)
-
+        self.net = mlpNet()
+        self.sigmoid = nn.Sigmoid()
+        #self.net = TemporalConvNet(N, B, H, P, X, R, C, norm_type, causal, mask_nonlinear)
+        #self.net = mlpNet()
         self.classifier0 = BinaryClassifier(128)
         self.classifier1 = MultiClassifier(0, 128)
         # init
@@ -33,18 +37,163 @@ class mixNet(nn.Module):
 
 
     def forward(self, mixture):
-        mixture = mixture.unsqueeze(1)
+        #mixture = mixture.unsqueeze(1)
         mixture_1 = self.net(mixture)
+        #print(mixture_1.shape)
+        #[bs,2,1,128]
+        channel_0_mask = self.sigmoid(mixture_1)
+        channel_1_mask = torch.ones(channel_0_mask.size(0),channel_0_mask.size(1)).cuda()-channel_0_mask
+        channel_0 = mixture*channel_0_mask
+        channel_1 = mixture*channel_1_mask
+        classifier_output0 = self.classifier0(channel_0)
+        #classifier_output0 = self.classifier0(mixture_1)
+        classifier_output1 = self.classifier1(channel_1)
+        #classifier_output0 = self.classifier0(mixture)
+        #classifier_output1 = self.classifier1(mixture)
+        #combined_classifier_output = torch.cat((classifier_output0, classifier_output1), dim=1)
+        #return combined_classifier_output
+        return classifier_output0,classifier_output1
+
+class mixNet(nn.Module):
+    def __init__(self, N, B, H, P, X, R, C, K, norm_type="gLN", causal=False,
+                 mask_nonlinear='relu'):
+        super(mixNet, self).__init__()
+        self.N, self.B, self.H, self.P, self.X, self.R, self.C, self.K = N, B, H, P, X, R, C, K
+        self.norm_type = norm_type
+        self.causal = causal
+        self.mask_nonlinear = mask_nonlinear
+        self.net = RepresentLayer('mlp','mlp')
+        #self.net = TemporalConvNet(N, B, H, P, X, R, C, norm_type, causal, mask_nonlinear)
+        #self.net = mlpNet()
+        self.classifier0 = BinaryClassifier(128)
+        self.classifier1 = MultiClassifier(0, 128)
+        # init
+        for p in self.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_normal_(p)
+
+
+    def forward(self, mixture):
+        #mixture = mixture.unsqueeze(1)
+        mixture_1 = self.net(mixture)
+        #print(mixture_1.shape)
         #[bs,2,1,128]
         mixture_2 = mixture_1.squeeze(dim=2)
         channel_0 = mixture_2[:, 0, :]
         channel_1 = mixture_2[:, 1, :]
         classifier_output0 = self.classifier0(channel_0)
+        #classifier_output0 = self.classifier0(mixture_1)
         classifier_output1 = self.classifier1(channel_1)
-        combined_classifier_output = torch.cat((classifier_output0, classifier_output1), dim=1)
-        return combined_classifier_output
+        #classifier_output0 = self.classifier0(mixture)
+        #classifier_output1 = self.classifier1(mixture)
+        #combined_classifier_output = torch.cat((classifier_output0, classifier_output1), dim=1)
+        #return combined_classifier_output
+        return classifier_output0,classifier_output1
 
+class mlpNet(nn.Module):
+    def __init__(self):
+        super(mlpNet,self).__init__()
+        self.fc1 = nn.Linear(128, 2048)
+        self.fc2 = nn.Linear(2048, 128)
+        self.relu = nn.ReLU()
+        
+    def forward(self,input):
+        output = self.fc1(input)
+        output = self.relu(output)
+        output = self.fc2(output)
+        output = self.relu(output)
+        return output
+        
+class RepresentLayer(nn.Module):
+    def __init__(self, type1, type2):
+        super(RepresentLayer, self).__init__()
+        self.type1 = type1
+        self.type2 = type2
+        self.mlp = mlpNet()
+        self.transformer = TransformerLayer(d_model=512,nhead=8)
+        self.cnn = OneDimCNNLayer(in_channels=1, out_channels=1, kernel_size=3, stride=1, padding=1)
+    
+    def forward(self, input):
+        if self.type1 == 'mlp':
+            output1 = self.mlp(input)
+        elif self.type1 == 'transformer':
+            output1 = self.transformer(input)
+        elif self.type1 == 'cnn':
+            output1 = self.cnn(input)
+        
+        if self.type2 == 'mlp':
+            output_channel1 = self.mlp(output1)
+            output_channel2 = self.mlp(output1)
+        elif self.type2 == 'transformer':
+            output_channel1 = self.transformer(output1)
+            output_channel2 = self.transformer(output1)
+        elif self.type2 == 'cnn':
+            output_channel1 = self.cnn(output1)
+            output_channel2 = self.cnn(output1)
+        
+        output = torch.cat((output_channel1.unsqueeze(dim=1),
+                            output_channel2.unsqueeze(dim=1)),dim=1)
+                            
+        return output
+            
+            
+class OneDimCNNLayer(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
+        super(OneDimCNNLayer, self).__init__()
+        
+        # 一维卷积层
+        self.conv1d = nn.Conv1d(in_channels, out_channels, kernel_size, stride=stride, padding=padding)
+        
+        # 非线性激活函数（ReLU）
+        self.relu = nn.ReLU()
 
+    def forward(self, x):
+        # 前向传播
+        x = self.conv1d(x)
+        x = self.relu(x)
+        return x
+
+class TransformerLayer(nn.Module):
+    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1):
+        super(TransformerLayer, self).__init__()
+        
+        # Self-Attention 层
+        self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
+        
+        # Layer Normalization
+        self.norm1 = nn.LayerNorm(d_model)
+        
+        # 前馈神经网络层
+        self.feedforward = nn.Sequential(
+            nn.Linear(d_model, dim_feedforward),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(dim_feedforward, d_model)
+        )
+        
+        # Layer Normalization
+        self.norm2 = nn.LayerNorm(d_model)
+        
+        # Dropout
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+        # Self-Attention 层
+        attn_output, _ = self.self_attn(x, x, x)
+        
+        # 残差连接和 Layer Normalization
+        x = x + self.dropout(attn_output)
+        x = self.norm1(x)
+        
+        # 前馈神经网络层
+        ff_output = self.feedforward(x)
+        
+        # 残差连接和 Layer Normalization
+        x = x + self.dropout(ff_output)
+        x = self.norm2(x)
+        
+        return x      
+        
 class gMLP(nn.Module):
     def __init__(self, N, L, B, H, P, X, R, C, norm_type="gLN", causal=False,
                  mask_nonlinear='relu'):
@@ -302,7 +451,7 @@ class EditedNet(nn.Module):
         # [M, B, K] -> [M, B, K]
         
         
-        self.coreNet = gMLP_core(num_tokens=N,len_sen=B,dim=K,d_ff=1024,num_layers=8)
+        self.coreNet = gMLP_core(num_tokens=N,len_sen=B,dim=K,d_ff=1024,num_layers=0)
 
         # [M, B, K] -> [M, C*N, K]
         self.mask_conv1x1 = nn.Conv1d(B, C*N, 1, bias=False)
@@ -408,7 +557,9 @@ class BinaryClassifier(nn.Module):
         # self.fc3 = nn.Linear(256, 1)
         # self.fc2_1 = nn.Linear(256, 256)
         #self.fc3 = nn.Linear(2048, 2048)
-        self.fc3 = nn.Linear(2048, 1)
+        self.fc3 = nn.Linear(2048, 2048)
+        self.fc4 = nn.Linear(2048,1)
+
 
         # 定义ReLU和Sigmoid激活函数
         self.relu = nn.ReLU()
@@ -430,6 +581,8 @@ class BinaryClassifier(nn.Module):
         x = self.relu(x)
         # 应用第三个全连接层和ReLU激活函数
         x = self.fc3(x)
+        x = self.relu(x)
+        x = self.fc4(x)
         x = self.sigmoid(x)
         return x
 

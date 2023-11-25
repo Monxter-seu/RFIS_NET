@@ -23,6 +23,7 @@ from g_mlp import gMLP
 from g_mlp import mixNet
 from pit_criterion import new_loss
 from data import MyDataLoader, MyDataset
+from conv_tasnet import TemporalConvNet
 
 
 
@@ -58,19 +59,19 @@ if __name__ == "__main__":
 
     # 实例化模型
 
-    model = mixNet(N, B, H, P, X, R, C, 128).cuda()
+    model = mixNet(N, B, H, P, X, R, C, 128)
     model = model.cuda()
 
     # 定义损失函数和优化器
-    # criterion = new_loss()
+    criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     train_dataset = MyDataset('D:\\frequencyProcess\\testout\\tr\\', batch_size=16)
-    train_loader = MyDataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=4)
+    train_loader = MyDataLoader(train_dataset, batch_size=1, shuffle=False, num_workers=1)
     cv_dataset = MyDataset('D:\\frequencyProcess\\testout\\tt\\', batch_size=16)
-    cv_loader = MyDataLoader(cv_dataset, batch_size=1, shuffle=True, num_workers=4)
+    cv_loader = MyDataLoader(cv_dataset, batch_size=1, shuffle=False, num_workers=4)
     test_dataset = MyDataset('D:\\frequencyProcess\\testout\\cv\\', batch_size=16)
-    test_loader = MyDataLoader(test_dataset, batch_size=1, shuffle=True, num_workers=4)
+    test_loader = MyDataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=4)
     # 训练模型
     num_epochs = 120
     for epoch in range(num_epochs):
@@ -90,8 +91,8 @@ if __name__ == "__main__":
             #print(data.shape)
             # 向前传递
             outputs = model(data)
-            #print('11111111111111')
-            loss = new_loss(outputs, labels)
+            #print(outputs.shape)
+            loss = criterion(outputs, labels[:,0].unsqueeze(1))
 
             # 反向传播和优化
             optimizer.zero_grad()
@@ -99,14 +100,14 @@ if __name__ == "__main__":
             optimizer.step()
 
             splited_outputs0 = outputs[:, 0].unsqueeze(1)
-            splited_outputs1 = outputs[:, 1:7]
+            #splited_outputs1 = outputs[:, 1:7]
 
             # 计算损失和准确率
             train_loss += loss.item() * data.size(0)
             predicted0 = (splited_outputs0 > 0.5).float()
-            _, predicted1 = torch.max(splited_outputs1, 1)
+            #_, predicted1 = torch.max(splited_outputs1, 1)
             train_correct0 += (predicted0 == labels[:,0].unsqueeze(1)).sum().item()
-            train_correct1 += (predicted1 == labels[:,1]).int().sum().item()
+            #train_correct1 += (predicted1 == labels[:,1]).int().sum().item()
             total_samples += labels.size(0)
             
             #count++
@@ -114,47 +115,44 @@ if __name__ == "__main__":
             
         train_loss /= len(train_loader.dataset)
         train_accuracy0 = train_correct0 / total_samples
-        train_accuracy1 = train_correct1 / total_samples
+        #train_accuracy1 = train_correct1 / total_samples
         print('============')
         print('train_loss', train_loss)
         print('train_accuracy0', train_accuracy0)
-        print('train_accuracy1', train_accuracy1,flush=True)  
+        #print('train_accuracy1', train_accuracy1,flush=True)  
         
         
-        model.eval()
-        cv_loss = 0
-        cv_correct0 = 0
-        cv_correct1 = 0
-        total_samples = 0
-        with torch.no_grad():
-            for data, labels in cv_loader:
-                # 将数据和标签转换为张量
-                data = data.cuda()
-                labels = labels.cuda()
-        
-                # 向前传递
-                outputs = model(data)
-                loss = new_loss(outputs, labels)
+        # model.eval()
+        # cv_loss = 0
+        # cv_correct0 = 0
+        # cv_correct1 = 0
+        # total_samples = 0
+        # with torch.no_grad():
+            # for data, labels in cv_loader:
+                # data = data.cuda()
+                # labels = labels.cuda()
 
-                splited_outputs0 = outputs[:, 0].unsqueeze(1)
-                splited_outputs1 = outputs[:, 1:7]
+                # outputs = model(data)
+                # loss = new_loss(outputs, labels)
+
+                # splited_outputs0 = outputs[:, 0].unsqueeze(1)
+                # splited_outputs1 = outputs[:, 1:7]
         
-                cv_loss += loss.item() * data.size(0)
-                predicted0 = (splited_outputs0 > 0.5).float()
-                _, predicted1 = torch.max(splited_outputs1, 1)
-                cv_correct0 += (predicted0 == labels[:,0].unsqueeze(1)).sum().item()
-                cv_correct1 += (predicted1 == labels[:,1]).int().sum().item()
-                total_samples += labels.size(0)
-            cv_loss /= len(cv_loader.dataset)
-            cv_accuracy0 = cv_correct0 / total_samples
-            cv_accuracy1 = cv_correct1 / total_samples
+                # cv_loss += loss.item() * data.size(0)
+                # predicted0 = (splited_outputs0 > 0.5).float()
+                # _, predicted1 = torch.max(splited_outputs1, 1)
+                # cv_correct0 += (predicted0 == labels[:,0].unsqueeze(1)).sum().item()
+                # cv_correct1 += (predicted1 == labels[:,1]).int().sum().item()
+                # total_samples += labels.size(0)
+            # cv_loss /= len(cv_loader.dataset)
+            # cv_accuracy0 = cv_correct0 / total_samples
+            # cv_accuracy1 = cv_correct1 / total_samples
 
-            print('cv_loss', cv_loss)
-            print('cv_accuracy0', cv_accuracy0)
-            print('cv_accuracy1', cv_accuracy1)
-            torch.save(model.state_dict(), "Classifier.pth")
-            print('==========')
-
+            # print('cv_loss', cv_loss)
+            # print('cv_accuracy0', cv_accuracy0)
+            # print('cv_accuracy1', cv_accuracy1)
+            # torch.save(model.state_dict(), "Classifier.pth")
+            # print('==========')
         
 
     # 测试模式

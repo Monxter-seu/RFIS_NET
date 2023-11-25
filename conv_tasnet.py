@@ -360,11 +360,11 @@ if __name__ == "__main__":
     M, N, L, T = 2, 3, 4, 12
     K = 2*T//L-1
     B, H, P, X, R, C, norm_type, causal = 2, 3, 3, 3, 2, 2, "gLN", False
-    mixture = torch.randint(3, (M, T), dtype=torch.float)
+    mixture = torch.randint(3, (M, T), dtype=torch.float).cuda()
     # test Encoder
     with torch.no_grad():
-        encoder = Encoder(L, N)
-        encoder.conv1d_U.weight.data = torch.randint(2, encoder.conv1d_U.weight.size(), dtype=torch.float)
+        encoder = Encoder(L, N).cuda()
+        encoder.conv1d_U.weight.data = torch.randint(2, encoder.conv1d_U.weight.size(), dtype=torch.float).cuda()
         mixture_w = encoder(mixture)
     print('mixture', mixture)
     print('U', encoder.conv1d_U.weight)
@@ -372,7 +372,7 @@ if __name__ == "__main__":
     print('mixture_w size', mixture_w.size())
 
     # test TemporalConvNet
-    separator = TemporalConvNet(N, B, H, P, X, R, C, norm_type=norm_type, causal=causal)
+    separator = TemporalConvNet(N, B, H, P, X, R, C, norm_type=norm_type, causal=causal).cuda()
     est_mask = separator(mixture_w)
     print('est_mask', est_mask)
 
@@ -383,8 +383,8 @@ if __name__ == "__main__":
     #print('est_source', est_source)
 
     # test Conv-TasNet
-    conv_tasnet = ConvTasNet(N, L, B, H, P, X, R, C, norm_type=norm_type)
-    est_source = conv_tasnet(mixture)
+    conv_tasnet = ConvTasNet(N, L, B, H, P, X, R, C, norm_type=norm_type).cuda()
+    est_source = conv_tasnet(mixture).cuda()
     print('est_source', est_source)
     print('est_source size', est_source.size())
 

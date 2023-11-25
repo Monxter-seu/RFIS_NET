@@ -8,31 +8,24 @@ import torch.nn.functional as F
 
 EPS = 1e-8
 
-def new_loss(source_label, estimate_label):
-    #source为网络计算结果，estimate为直接输入
-    #print('source_label===', source_label)
-
-    #print('estimate_label===', estimate_label)
-    source_first_class = source_label[:, 0].unsqueeze(1)
-    source_second_class = source_label[:, 1:7]
+def new_loss(output1,output2,left_label,right_label,right_ratio):
+    #source_first_class = source_label[:, 0].unsqueeze(1)
+    #source_second_class = source_label[:, 1:7]
     #print('source_second_class=====', source_second_class)
-    estimate_first_class = estimate_label[:, 0].unsqueeze(1).float()
-    estimate_second_class = estimate_label[:, 1].long()
+    #estimate_first_class = estimate_label[:, 0].unsqueeze(1).float()
+    #estimate_second_class = estimate_label[:, 1].long()
     #print('estimate_second_class', estimate_second_class)
-
+    
+    right_label = right_label.long()
     criterion1 = torch.nn.BCELoss()
     criterion2 = torch.nn.CrossEntropyLoss()
 
-    #estimate_first_class = estimate_first_class.float()
-    #print('source_first_class', source_first_class)
-    #print('estimate_first_class', estimate_first_class)
-
-    loss_first_class = criterion1(source_first_class, estimate_first_class)
+    loss_first_class = criterion1(output1, left_label.unsqueeze(1))
     #print('loss_first_class',loss_first_class)
-    loss_second_class = criterion2(source_second_class, estimate_second_class)
+    loss_second_class = criterion2(output2, right_label)
     #print('loss_second_class', loss_second_class)
 
-    total_loss = loss_first_class + loss_second_class
+    total_loss = loss_first_class + loss_second_class*right_ratio
 
     return total_loss
 
