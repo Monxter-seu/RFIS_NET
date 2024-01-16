@@ -1,13 +1,28 @@
-# Created on 2018/12
-# Author: Kaituo XU
+# Created on 2018/12,edited on 202\/10
+# Author: Kaituo XU,Minxu Hua
+# 损失函数
 
 from itertools import permutations
 
 import torch
 import torch.nn.functional as F
+import numpy as np
 
 EPS = 1e-8
 
+def variance_loss(output,classifier_output,left_label):
+    criterion1 = torch.nn.BCELoss()
+    #print(output.shape)
+    # print('classifier_output==',classifier_output)
+    # print('left_label',left_label)
+    classifier_output = torch.squeeze(classifier_output,dim=-1)
+    loss_first_class = criterion1(classifier_output,left_label)
+    variance = torch.var(output,dim=1)
+    loss_second_class = torch.sum(variance)
+    
+    total_loss = loss_first_class + loss_second_class
+    return total_loss
+    
 def new_loss(output1,output2,left_label,right_label,right_ratio):
     #source_first_class = source_label[:, 0].unsqueeze(1)
     #source_second_class = source_label[:, 1:7]
@@ -26,6 +41,28 @@ def new_loss(output1,output2,left_label,right_label,right_ratio):
     #print('loss_second_class', loss_second_class)
 
     total_loss = loss_first_class + loss_second_class*right_ratio
+
+    return total_loss
+    
+def confounder_loss(output1,output2,output3,left_label,right_label,right_ratio=1,output3_ratio=1):
+    #source_first_class = source_label[:, 0].unsqueeze(1)
+    #source_second_class = source_label[:, 1:7]
+    #print('source_second_class=====', source_second_class)
+    #estimate_first_class = estimate_label[:, 0].unsqueeze(1).float()
+    #estimate_second_class = estimate_label[:, 1].long()
+    #print('estimate_second_class', estimate_second_class)
+    
+    right_label = right_label.long()
+    criterion1 = torch.nn.BCELoss()
+    criterion2 = torch.nn.CrossEntropyLoss()
+
+    loss_first_class = criterion1(output1, left_label.unsqueeze(1))
+    #print('loss_first_class',loss_first_class)
+    loss_second_class = criterion2(output2, right_label)
+    #print('loss_second_class', loss_second_class)
+    loss_confounder_class = criterion1(output3, left_label.unsqueeze(1))
+    
+    total_loss = loss_first_class + loss_second_class*right_ratio+loss_confounder_class*output3_ratio
 
     return total_loss
 

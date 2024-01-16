@@ -16,6 +16,64 @@ from utils import overlap_and_add
 EPS = 1e-8
 NET = 'transformer'
 
+#
+class dayShiftNet(nn.Module):
+    def __init__(self):
+        super(dayShiftNet, self).__init__()
+        self.net = mlpNet()
+        self.classifier0 = BinaryClassifier(128)
+        for p in self.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_normal_(p)
+    
+    def forward(self, mixture):
+        output = self.net(mixture)
+        classifier_output = self.classifier0(output)
+        return output,classifier_output
+        
+    
+#新网络用来计算confounder以及进行推理
+class confounderNet(nn.Module):
+    def __init__(self, N, B, H, P, X, R, C, K, norm_type="gLN", causal=False,
+                 mask_nonlinear='relu'):
+        super(confounderNet, self).__init__()
+        self.N, self.B, self.H, self.P, self.X, self.R, self.C, self.K = N, B, H, P, X, R, C, K
+        self.norm_type = norm_type
+        self.causal = causal
+        self.mask_nonlinear = mask_nonlinear
+        self.net = RepresentLayer('mlp','mlp')
+        #self.net = TemporalConvNet(N, B, H, P, X, R, C, norm_type, causal, mask_nonlinear)
+        #self.net = mlpNet()
+        self.classifier0 = BinaryClassifier(128)
+        self.classifier1 = MultiClassifier(0, 128)
+        self.classifier2 = BinaryClassifier(128)
+        # init
+        for p in self.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_normal_(p)
+
+
+    def forward(self, mixture, confounder):
+        #mixture = mixture.unsqueeze(1)
+        mixture_1 = self.net(mixture)
+        #print(mixture_1.shape)
+        #[bs,2,1,128]
+        mixture_2 = mixture_1.squeeze(dim=2)
+        channel_0 = mixture_2[:, 0, :]
+        channel_1 = mixture_2[:, 1, :]
+        classifier_output0 = self.classifier0(channel_0)
+        #classifier_output0 = self.classifier0(mixture_1)
+        #self.confounder = channel_1
+        channel_2 = channel_0 + torch.unsqueeze(confounder, 0).expand(channel_0.size(0), -1)
+        classifier_output1 = self.classifier1(channel_1)
+        classifier_output2 = self.classifier2(channel_2)
+        #classifier_output0 = self.classifier0(mixture)
+        #classifier_output1 = self.classifier1(mixture)
+        #combined_classifier_output = torch.cat((classifier_output0, classifier_output1), dim=1)
+        #return combined_classifier_output
+        return classifier_output0, classifier_output1, classifier_output2
+        
+        
 class maskNet(nn.Module):
     def __init__(self, N, B, H, P, X, R, C, K, norm_type="gLN", causal=False,
                  mask_nonlinear='relu'):
@@ -83,12 +141,22 @@ class mixNet(nn.Module):
         channel_1 = mixture_2[:, 1, :]
         classifier_output0 = self.classifier0(channel_0)
         #classifier_output0 = self.classifier0(mixture_1)
+        #self.confounder = channel_1
         classifier_output1 = self.classifier1(channel_1)
         #classifier_output0 = self.classifier0(mixture)
         #classifier_output1 = self.classifier1(mixture)
         #combined_classifier_output = torch.cat((classifier_output0, classifier_output1), dim=1)
         #return combined_classifier_output
         return classifier_output0,classifier_output1
+    
+    def cal_confounder(self, mixture):
+        mixture_1 = self.net(mixture)
+        #print(mixture_1.shape)
+        #[bs,2,1,128]
+        mixture_2 = mixture_1.squeeze(dim=2)
+        channel_0 = mixture_2[:, 0, :]
+        channel_1 = mixture_2[:, 1, :]
+        return channel_1
 
 class mlpNet(nn.Module):
     def __init__(self):
@@ -103,27 +171,28 @@ class mlpNet(nn.Module):
         output = self.fc2(output)
         output = self.relu(output)
         return output
-        
+
+#整个表示层     
 class RepresentLayer(nn.Module):
     def __init__(self, type1, type2):
         super(RepresentLayer, self).__init__()
         self.type1 = type1
         self.type2 = type2
-        self.mlp = mlpNet()
-        self.transformer = TransformerLayer(d_model=512,nhead=8)
-        self.cnn = OneDimCNNLayer(in_channels=1, out_channels=1, kernel_size=3, stride=1, padding=1)
-    
+        self.mlp1 = mlpNet()
+        self.mlp2 = mlpNet()
+        self.transformer = TransformerLayer(d_model=128,nhead=8)
+        self.cnn = Simple1DCNN()
     def forward(self, input):
         if self.type1 == 'mlp':
-            output1 = self.mlp(input)
+            output1 = self.mlp1(input)
         elif self.type1 == 'transformer':
             output1 = self.transformer(input)
         elif self.type1 == 'cnn':
             output1 = self.cnn(input)
         
         if self.type2 == 'mlp':
-            output_channel1 = self.mlp(output1)
-            output_channel2 = self.mlp(output1)
+            output_channel1 = self.mlp2(output1)
+            output_channel2 = self.mlp2(output1)
         elif self.type2 == 'transformer':
             output_channel1 = self.transformer(output1)
             output_channel2 = self.transformer(output1)
@@ -136,7 +205,47 @@ class RepresentLayer(nn.Module):
                             
         return output
             
-            
+class Simple1DCNN(nn.Module):
+    def __init__(self):
+        super(Simple1DCNN, self).__init__()
+        
+        # 第一个卷积层，输入通道数为1，输出通道数为32，卷积核大小为3
+        self.conv1 = nn.Conv1d(in_channels=16, out_channels=32, kernel_size=16)
+        
+        # 第二个卷积层，输入通道数为32，输出通道数为64，卷积核大小为3
+        self.conv2 = nn.Conv1d(in_channels=32, out_channels=64, kernel_size=16)
+        
+        # 池化层，池化窗口大小为2
+        self.pool = nn.MaxPool1d(kernel_size=32, stride=2)
+        
+        # 全连接层，输入特征数为64*4（经过两次池化层），输出特征数为128
+        self.fc1 = nn.Linear(1312, 128)
+        
+        #self.fc2 = nn.Linear(128, 128)
+        
+
+    def forward(self, x):
+        #[bs,128] bs=16
+        
+        x = x.unsqueeze(dim=2)
+        #print('x.shape',
+        x = x.permute(1, 0, 2)
+        #[128,bs,1]
+        #x = self.conv1(x)
+        #print('x.shape',x.shape)
+        print('x.shape',x.shape)
+        x = self.conv1(x)
+        x = F.relu(x)
+        x = self.pool(x)
+        #x = self.pool(F.relu(self.conv1(x)))
+        x = x.permute(1, 0, 2)
+        #x = self.pool(F.relu(self.conv2(x)))
+        x = x.view(-1, 1312)
+        #print('x.shape',x.shape)
+        #print('x.shape',x.shape)
+        x = F.relu(self.fc1(x))        
+        return x
+        
 class OneDimCNNLayer(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
         super(OneDimCNNLayer, self).__init__()

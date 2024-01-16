@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Created on 2023/03
 # Author: HUA
+# 用来测试直接分类的效果
 
 import torch
 import torch.nn as nn
@@ -75,11 +76,11 @@ if __name__ == "__main__":
 
     train_dataset = CustomDataset('D:\\frequencyProcess\\D10\\tr')
     train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-    cv_dataset = CustomDataset('D:\\frequencyProcess\\test\\cv')
+    cv_dataset = CustomDataset('D:\\frequencyProcess\\D10\\cv')
     cv_loader = DataLoader(cv_dataset, batch_size=16, shuffle=True, num_workers=2)
     #cv_dataset = CustomDataset('D:\\frequencyProcess\\test\\cv\\mix')
     #cv_loader = DataLoader(cv_dataset, batch_size=16, shuffle=True, num_workers=4)
-    test_dataset = CustomDataset('D:\\frequencyProcess\\test\\tt')
+    test_dataset = CustomDataset('D:\\frequencyProcess\\D10\\tt')
     test_loader = DataLoader(test_dataset, batch_size=16, shuffle=True, num_workers=2)
     
     # 训练模型
