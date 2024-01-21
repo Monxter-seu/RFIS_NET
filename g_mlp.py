@@ -31,7 +31,34 @@ class dayShiftNet(nn.Module):
         classifier_output = self.classifier0(output)
         return output,classifier_output
         
-    
+#end2end训练模型(只输出confounder，不加入coufounder)
+class end2end_train(nn.Module):
+    def __init__(self, N, B, H, P, X, R, C, K, norm_type="gLN", causal=False,
+                 mask_nonlinear='relu'):
+        super(end2end_train, self).__init__()    
+        self.norm_type = norm_type
+        self.causal = causal
+        self.mask_nonlinear = mask_nonlinear
+        self.representation = mlpNet()
+        self.contextExtraction = mlpNet()
+        self.fingerprintExtraction = mlpNet()
+        #self.net = TemporalConvNet(N, B, H, P, X, R, C, norm_type, causal, mask_nonlinear)
+        #self.net = mlpNet()
+        self.classifier0 = BinaryClassifier(128)
+        self.classifier1 = MultiClassifier(0, 128)
+        # init
+        for p in self.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_normal_(p)
+
+    def forward(self, mixture):
+        feature = self.representation(mixture)
+        fingerFeature = self.fingerprintExtraction(feature)
+        contextFeature =self.contextExtraction(feature)
+        classifier_output0 = self.classifier0(fingerFeature)
+        classifier_output1 = self.classifier1(contextFeature)
+        return classifier_output0, classifier_output1, feature
+        
 #新网络用来计算confounder以及进行推理
 class confounderNet(nn.Module):
     def __init__(self, N, B, H, P, X, R, C, K, norm_type="gLN", causal=False,

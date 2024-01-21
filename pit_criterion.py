@@ -10,6 +10,29 @@ import numpy as np
 
 EPS = 1e-8
 
+def end2end_train_loss(output, classifier_output0, left_label,
+                       classifier_output1, right_label):
+    criterion1 = torch.nn.BCELoss()
+    criterion3 = torch.nn.CrossEntropyLoss()
+    right_label = right_label.view(-1)
+    right_label = right_label.long()
+    #print(classifier_output1)
+    #print(right_label)
+    #print(output.shape)
+    # print('classifier_output==',classifier_output)
+    # print('left_label',left_label)
+    classifier_output0 = torch.squeeze(classifier_output0,dim=-1)
+    loss_first_class = criterion1(classifier_output0,left_label)
+    variance = torch.var(output,dim=1)
+    loss_second_class =  torch.div(torch.sum(variance), right_label.size(0), rounding_mode='trunc')
+    classifier_output1 = classifier_output1.view(classifier_output1.size(0)
+                                                 * classifier_output1.size(1),classifier_output1.size(2))
+    loss_third_class = criterion3(classifier_output1, right_label)
+    
+    total_loss = 0*loss_first_class + loss_second_class + loss_third_class
+    return total_loss
+    
+    
 def variance_loss(output,classifier_output,left_label):
     criterion1 = torch.nn.BCELoss()
     #print(output.shape)
@@ -37,6 +60,8 @@ def new_loss(output1,output2,left_label,right_label,right_ratio):
 
     loss_first_class = criterion1(output1, left_label.unsqueeze(1))
     #print('loss_first_class',loss_first_class)
+    # print('output2.shape',output2.shape)
+    # print('right_label.shape',right_label.shape)
     loss_second_class = criterion2(output2, right_label)
     #print('loss_second_class', loss_second_class)
 

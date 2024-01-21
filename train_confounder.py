@@ -75,6 +75,14 @@ if __name__ == "__main__":
         model = confounderNet(N, B, H, P, X, R, C, 128)
         
     model = model.cuda()
+    checkpoint = torch.load('representer.pth')
+    model.net.mlp1.fc1.weight.data = checkpoint['net.fc1.weight']
+    model.net.mlp1.fc2.weight.data = checkpoint['net.fc2.weight']
+    
+    # for param in  model.net.mlp1.fc1.parameters():
+        # param.requires_grad = False
+    # for param in  model.net.mlp1.fc2.parameters():
+        # param.requires_grad = False
     #加载confounder
     target_path = 'D:\\frequencyProcess\\confounder_dic'
     all_files = get_file_paths(target_path)
@@ -89,16 +97,16 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=0.00001)
 
     train_dataset = CustomDataset('D:\\frequencyProcess\\D1012\\tr')
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
     cv_dataset = CustomDataset('D:\\frequencyProcess\\D1012\\cv')
-    cv_loader = DataLoader(cv_dataset, batch_size=16, shuffle=True)
+    cv_loader = DataLoader(cv_dataset, batch_size=128, shuffle=True)
     #cv_dataset = CustomDataset('D:\\frequencyProcess\\test\\cv\\mix')
     #cv_loader = DataLoader(cv_dataset, batch_size=16, shuffle=True, num_workers=4)
     test_dataset = CustomDataset('D:\\frequencyProcess\\D1012\\tt')
-    test_loader = DataLoader(test_dataset, batch_size=16, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=128, shuffle=True)
     
     # 训练模型
-    num_epochs = 500
+    num_epochs = 400
     for epoch in range(num_epochs):
         # 训练模式
         #start_time = time.time()
