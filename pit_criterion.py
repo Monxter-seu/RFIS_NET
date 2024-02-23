@@ -10,6 +10,33 @@ import numpy as np
 
 EPS = 1e-8
 
+def end2end_test_loss(output, classifier_output0, left_label,
+                       classifier_output1, right_label, confounder_classifier_output):
+    #criterion1 = torch.nn.BCELoss()
+    criterion3 = torch.nn.CrossEntropyLoss()
+    left_label = left_label.view(-1)
+    left_label = left_label.long()
+    right_label = right_label.view(-1)
+    right_label = right_label.long()
+    #print(classifier_output1)
+    #print(left_label.shape)
+    #print(output.shape)
+    #print('classifier_output==',classifier_output0.shape)
+    # print('left_label',left_label)
+    classifier_output0 = classifier_output0.view(classifier_output0.size(0)* classifier_output0.size(1),classifier_output0.size(2))
+    loss_first_class = criterion3(classifier_output0,left_label)
+    variance = torch.var(output,dim=1)
+    loss_second_class =  torch.div(torch.sum(variance), right_label.size(0), rounding_mode='trunc')
+    classifier_output1 = classifier_output1.view(classifier_output1.size(0)
+                                                 * classifier_output1.size(1),classifier_output1.size(2))
+    loss_third_class = criterion3(classifier_output1, right_label)
+    confounder_classifier_output = confounder_classifier_output.view(confounder_classifier_output.size(0)
+                                                           * confounder_classifier_output.size(1),confounder_classifier_output.size(2))
+    loss_forth_class = criterion3(confounder_classifier_output,left_label)
+    total_loss = loss_first_class + loss_second_class + 0*loss_third_class + loss_forth_class
+                    
+    return total_loss
+    
 def end2end_train_loss(output, classifier_output0, left_label,
                        classifier_output1, right_label):
     criterion1 = torch.nn.BCELoss()
@@ -87,7 +114,7 @@ def confounder_loss(output1,output2,output3,left_label,right_label,right_ratio=1
     #print('loss_second_class', loss_second_class)
     loss_confounder_class = criterion1(output3, left_label.unsqueeze(1))
     
-    total_loss = loss_first_class + loss_second_class*right_ratio+loss_confounder_class*output3_ratio
+    total_loss = loss_first_class + 0*loss_second_class*right_ratio+loss_confounder_class*output3_ratio
 
     return total_loss
 

@@ -55,15 +55,13 @@ def extract_files(source_folder, device_id, port, output_folder1, output_folder2
 
 
 #从source_folder下所有的日期文件夹中提取数据，划分为训练集测试集，随机选取，放入export_folder中
-source_folder = 'D:\\csvProcessNew'
-main_device_index = 2
+source_folder = 'D:\\csvProcessNew_100000'
 split_ratio = 0.7
-main_file_num = 1500
+main_file_num = 700
 day_subfolders = [f.path for f in os.scandir(source_folder) if f.is_dir() and f.name != source_folder]
 device_dic = ['pi06', 'rh01', 'rh02', 'rh03', 'tp47', 'tp49', 'tp50', 'wy00', 'wy01', 'wy02']
 port_dic = [1,2,3,4]
-vice_file_num = 1500 // (len(device_dic) - 1) 
-export_folder = 'D:\\frequencyProcess\\DEVICE_RH02'
+export_folder = 'D:\\frequencyProcess\\Multi_10T'
 
 tr_dir = os.path.join(export_folder, 'tr')
 tt_dir = os.path.join(export_folder, 'tt')
@@ -88,20 +86,11 @@ for subfolder in day_subfolders:
     
     for device_id in device_dic:
         for port_index in port_dic:
-            cur_tr_0_dir = os.path.join(cur_tr_dir,f"0_{port_index}")
-            cur_tt_0_dir = os.path.join(cur_tt_dir,f"0_{port_index}")
-            cur_tr_1_dir = os.path.join(cur_tr_dir,f"1_{port_index}")
-            cur_tt_1_dir = os.path.join(cur_tt_dir,f"1_{port_index}")
-            if not os.path.exists(cur_tr_0_dir):
-                os.makedirs(cur_tr_0_dir)
-            if not os.path.exists(cur_tt_0_dir):
-                os.makedirs(cur_tt_0_dir)
-            if not os.path.exists(cur_tr_1_dir):
-                os.makedirs(cur_tr_1_dir)
-            if not os.path.exists(cur_tt_1_dir):
-                os.makedirs(cur_tt_1_dir)
+            tr_dir_last = os.path.join(cur_tr_dir,f"{device_dic.index(device_id)}_{port_index}")
+            tt_dir_last = os.path.join(cur_tt_dir,f"{device_dic.index(device_id)}_{port_index}")
+            if not os.path.exists(tr_dir_last):
+                os.makedirs(tr_dir_last)
+            if not os.path.exists(tt_dir_last):
+                os.makedirs(tt_dir_last)
                 
-            if device_id == device_dic[main_device_index]:
-                extract_files(subfolder,device_id,port_index,cur_tr_0_dir,cur_tt_0_dir,main_file_num,split_ratio)
-            else:
-                extract_files(subfolder,device_id,port_index,cur_tr_1_dir,cur_tt_1_dir,vice_file_num,split_ratio)
+            extract_files(subfolder,device_id,port_index,tr_dir_last,tt_dir_last,main_file_num,split_ratio)

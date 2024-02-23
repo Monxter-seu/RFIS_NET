@@ -16,7 +16,137 @@ def get_all_subdirectories(root_folder):
         # subdirectories.extend([os.path.abspath(os.path.join(dirpath, subdir)) for subdir in dirnames])
     
     return subdirectories
-    
+
+class MultiDataset(Dataset):
+    def __init__(self, root_dir):
+        self.root_dir = root_dir
+        #主文件夹下有几个子文件夹代表天数
+        self.subfolders = [f.path for f in os.scandir(root_dir) if f.is_dir()]
+        #天数
+        self.dayNum = len(self.subfolders)
+        #print('dayNum',self.dayNum)
+        #print(self.classNum)
+        self.file_paths = self.get_file_paths()
+        #print(len(self.file_paths))
+        #print(self.file_paths)
+        #print('len of file paths',len(self.file_paths))
+        #print('len of [0]',len(self.file_paths[0]))
+        #print('[0][0]',self.file_paths[3][1])
+        #类的数量
+        self.classNum = len(self.file_paths)//self.dayNum
+        #print(self.classNum)
+        
+    def __len__(self):
+        total_length = 0
+        for i in range(self.classNum):
+            total_length += len(self.file_paths[0])
+        return total_length
+
+    def __getitem__(self, idx):
+        #print('idx==',idx)
+        left_labels = []
+        right_labels = []
+        datas = []
+        index = idx
+        start = 0
+                
+        for i in range(self.dayNum): 
+            # 一个天里面总数
+            #print('i==',i)
+            oneClassTotal = self.classNum*len(self.file_paths[0])
+            #print('oneClassTotal',oneClassTotal)
+            #print('index',index)
+            index0 = index//len(self.file_paths[0])+i*self.classNum
+            index1 = index%len(self.file_paths[0])
+            file_path = self.file_paths[index0][index1]
+            #print(file_path)
+            # 从文件夹名称中提取s标签
+            folder_name = os.path.basename(os.path.dirname(file_path))
+            #print('folder_name==',folder_name)
+            #print(folder_name)
+            left_label, right_label = map(float, folder_name.split('_'))
+            left_labels.append(torch.tensor(left_label))
+            right_labels.append(torch.tensor(right_label))
+            data = np.loadtxt(file_path, delimiter=",", dtype=np.float32)
+            # 在这里可以进行进一步的数据处理，例如转换为张量等
+            data = torch.from_numpy(data).float()
+            datas.append(data)
+            # 返回数据和标签
+        datas = torch.stack(datas)
+        left_labels = torch.stack(left_labels)
+        right_labels = torch.stack(right_labels)
+        return datas, left_labels, right_labels
+        
+    def get_file_paths(self):
+        file_paths = []
+        for cur_dir in self.subfolders:
+            #print(cur_dir)
+            for sub_dir in get_all_subdirectories(cur_dir):
+                path = []
+                #print(sub_dir)
+                for root, dirs, files in os.walk(sub_dir):
+                    for file in files:
+                        if file.endswith(".csv"):
+                            path.append(os.path.join(root, file))
+                file_paths.append(path)
+        return file_paths       
+
+#直接多分类
+class SimpleMultiDataset(Dataset):
+    def __init__(self, root_dir):
+        self.root_dir = root_dir
+        #主文件夹下有几个子文件夹代表天数
+        self.subfolders = [f.path for f in os.scandir(root_dir) if f.is_dir()]
+        #天数
+        self.dayNum = len(self.subfolders)
+        #print('dayNum',self.dayNum)
+        #print(self.classNum)
+        self.file_paths = self.get_file_paths()
+        #print(len(self.file_paths))
+        #print(self.file_paths)
+        #print('len of file paths',len(self.file_paths))
+        #print('len of [0]',len(self.file_paths[0]))
+        #print('[0][0]',self.file_paths[3][1])
+        #类的数量
+        self.classNum = len(self.file_paths)//self.dayNum
+        #print(self.classNum)
+        
+    def __len__(self):
+        total_length = 0
+        for i in range(self.classNum):
+            total_length += len(self.file_paths[0])
+        return total_length*self.dayNum
+
+    def __getitem__(self, idx):
+        index=idx
+        oneClassTotal = self.classNum*len(self.file_paths[0])
+        #print('oneClassTotal',oneClassTotal)
+        index0 = index%len(self.file_paths)
+        index1 = index%len(self.file_paths[0])
+        file_path = self.file_paths[index0][index1]
+        #print(file_path)
+        # 从文件夹名称中提取s标签
+        folder_name = os.path.basename(os.path.dirname(file_path))
+        left_label, right_label = map(float, folder_name.split('_'))
+        data = np.loadtxt(file_path, delimiter=",", dtype=np.float32)
+        # 在这里可以进行进一步的数据处理，例如转换为张量等
+        data = torch.from_numpy(data).float()
+        # 返回数据和标签
+        return data, left_label, right_label
+        
+    def get_file_paths(self):
+        file_paths = []
+        for cur_dir in self.subfolders:
+            #print(cur_dir)
+            for sub_dir in get_all_subdirectories(cur_dir):
+                path = []
+                #print(sub_dir)
+                for root, dirs, files in os.walk(sub_dir):
+                    for file in files:
+                        if file.endswith(".csv"):
+                            path.append(os.path.join(root, file))
+                file_paths.append(path)
+        return file_paths       
     
 #混杂因子实验时的dataset
 class CustomDataset(Dataset):
@@ -33,7 +163,6 @@ class CustomDataset(Dataset):
         # 从文件夹名称中提取标签
         folder_name = os.path.basename(os.path.dirname(file_path))
         left_label, right_label = map(float, folder_name.split('_'))
-        
         data = np.loadtxt(file_path, delimiter=",", dtype=np.float32)  # 假设你的数据是CSV格式的
         # 在这里可以进行进一步的数据处理，例如转换为张量等
         data = torch.from_numpy(data).float()
@@ -61,29 +190,33 @@ class End2EndCustomDataset(Dataset):
         #print(len(self.file_paths))
         #天数
         self.dayNum = len(self.file_paths)//self.classNum
+        #print(len(self.file_paths[0]))
         #print(self.dayNum)
         
     def __len__(self):
         total_length = 0
-        for i in range(len(self.subfolders)):
+        for i in range(self.classNum):
             total_length += len(self.file_paths[0])
         return total_length
 
     def __getitem__(self, idx):
+        #print('idx==',idx)
         left_labels = []
         right_labels = []
         datas = []
         index = idx
         start = 0
-        for i in range(self.classNum):
+        for i in range(self.dayNum):
             if (index-len(self.file_paths[i]))<0:
                 index = index
                 break
             else:
                 index = index-len(self.file_paths[i])
-            start += self.dayNum
+            start += self.classNum
                 
         for i in range(self.dayNum): 
+            #print('start+i==',start+i)
+            #print('index==',index)
             file_path = self.file_paths[start+i][index]
             #print(file_path)
             # 从文件夹名称中提取s标签
@@ -176,16 +309,17 @@ class NewCustomDataset(Dataset):
                 file_paths.append(path)
         return file_paths
         
-# # 示例用法
-# root_directory = "D:\\frequencyProcess\\end2end\\tr"
-# dataset = End2EndCustomDataset(root_dir=root_directory)
+# 示例用法
+# root_directory = "D:\\frequencyProcess\\Multi\\tr"
+# root_directory = "D:\\frequencyProcess\\testC"
+# dataset = SimpleMultiDataset(root_dir=root_directory)
 # print(len(dataset))
 # dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
 
 # # 遍历数据加载器
 # for batch in dataloader:
     # data, left_label,right_label = batch
-    # # 在这里处理每个批次的数据和标签
+    # # # 在这里处理每个批次的数据和标签
     # print(len(data))  # 假设你的数据是CSV格式，这里输出数据的形状
     # print(left_label)  # 输出左边和右边设备的标签
     # print(right_label)

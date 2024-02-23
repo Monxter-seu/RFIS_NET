@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import time
+import random
 
 from torchviz import make_dot
 from conv_tasnet import TemporalConvNet
@@ -30,6 +31,74 @@ class dayShiftNet(nn.Module):
         output = self.net(mixture)
         classifier_output = self.classifier0(output)
         return output,classifier_output
+
+class testMixNet(nn.Module):
+    def __init__(self):
+        super(testMixNet, self).__init__()
+        self.mixstyle = MixStyle(p=0.5, alpha=0.1)
+        self.classifier0 = MultiClassifier(0, 128,10)
+    
+    def forward(self, mixture):
+        #print('mixture_shape',mixture.shape)
+        output = self.mixstyle(mixture)
+        classifier_output = self.classifier0(output)
+        return classifier_output
+
+
+class testLSTMNet(nn.Module):
+    def __init__(self):
+        super(testLSTMNet, self).__init__()
+        self.net = nn.LSTM(128, 128, 2, batch_first=True)
+        self.classifier0 = MultiClassifier(0, 128,10)
+    
+    def forward(self, mixture):
+        #print('mixture_shape',mixture.shape)
+        output,( hn,cn) = self.net(mixture)
+        classifier_output = self.classifier0(output)
+        return classifier_output
+        
+class end2end_test_B(nn.Module):
+    def __init__(self, N, B, H, P, X, R, C, K, norm_type="gLN", causal=False,
+                 mask_nonlinear='relu'):
+        super(end2end_test_B, self).__init__()    
+        self.norm_type = norm_type
+        self.causal = causal
+        self.mask_nonlinear = mask_nonlinear
+        self.representation = mlpNet1()
+        self.contextExtraction = mlpNet()
+        self.confounderNet = mlpNet()
+        self.fingerprintExtraction = mlpNet()
+        
+        #self.net = TemporalConvNet(N, B, H, P, X, R, C, norm_type, causal, mask_nonlinear)
+        #self.net = mlpNet()
+        self.classifier0 = MultiClassifier(0, 128,10)
+        self.classifier1 = MultiClassifier(0, 128,6)
+        self.confounderClassifier = MultiClassifier(0, 128,10)
+        # init
+        for p in self.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_normal_(p)
+
+    def forward(self, mixture, confounder):
+        feature = self.representation(mixture)
+        fingerFeature = self.fingerprintExtraction(feature)
+        contextFeature =self.contextExtraction(feature)
+        confounderFeature = fingerFeature + confounder
+        classifier_output_confounder = self.confounderClassifier(confounderFeature)
+        classifier_output0 = self.classifier0(fingerFeature)
+        classifier_output1 = self.classifier1(contextFeature)
+        return classifier_output0, classifier_output1,classifier_output_confounder, feature
+        
+    def case_study(self, mixture):
+        mixture_1 = self.representation(mixture)
+        return mixture_1
+        
+    def cal_confounder(self, mixture):
+        mixture_1 = self.representation(mixture)
+        #print(mixture_1.shape)
+        #[bs,2,1,128]
+        confounder = self.contextExtraction(mixture_1)
+        return confounder
         
 #end2end训练模型(只输出confounder，不加入coufounder)
 class end2end_train(nn.Module):
@@ -45,7 +114,7 @@ class end2end_train(nn.Module):
         #self.net = TemporalConvNet(N, B, H, P, X, R, C, norm_type, causal, mask_nonlinear)
         #self.net = mlpNet()
         self.classifier0 = BinaryClassifier(128)
-        self.classifier1 = MultiClassifier(0, 128)
+        self.classifier1 = MultiClassifier(0, 128,6)
         # init
         for p in self.parameters():
             if p.dim() > 1:
@@ -58,6 +127,13 @@ class end2end_train(nn.Module):
         classifier_output0 = self.classifier0(fingerFeature)
         classifier_output1 = self.classifier1(contextFeature)
         return classifier_output0, classifier_output1, feature
+        
+    def cal_confounder(self, mixture):
+        mixture_1 = self.representation(mixture)
+        #print(mixture_1.shape)
+        #[bs,2,1,128]
+        confounder = self.contextExtraction(mixture_1)
+        return confounder
         
 #新网络用来计算confounder以及进行推理
 class confounderNet(nn.Module):
@@ -72,7 +148,7 @@ class confounderNet(nn.Module):
         #self.net = TemporalConvNet(N, B, H, P, X, R, C, norm_type, causal, mask_nonlinear)
         #self.net = mlpNet()
         self.classifier0 = BinaryClassifier(128)
-        self.classifier1 = MultiClassifier(0, 128)
+        self.classifier1 = MultiClassifier(0, 128,6)
         self.classifier2 = BinaryClassifier(128)
         # init
         for p in self.parameters():
@@ -114,7 +190,7 @@ class maskNet(nn.Module):
         #self.net = TemporalConvNet(N, B, H, P, X, R, C, norm_type, causal, mask_nonlinear)
         #self.net = mlpNet()
         self.classifier0 = BinaryClassifier(128)
-        self.classifier1 = MultiClassifier(0, 128)
+        self.classifier1 = MultiClassifier(0, 128,6)
         # init
         for p in self.parameters():
             if p.dim() > 1:
@@ -151,7 +227,7 @@ class mixNet(nn.Module):
         #self.net = TemporalConvNet(N, B, H, P, X, R, C, norm_type, causal, mask_nonlinear)
         #self.net = mlpNet()
         self.classifier0 = BinaryClassifier(128)
-        self.classifier1 = MultiClassifier(0, 128)
+        self.classifier1 = MultiClassifier(0, 128,6)
         # init
         for p in self.parameters():
             if p.dim() > 1:
@@ -189,6 +265,20 @@ class mlpNet(nn.Module):
     def __init__(self):
         super(mlpNet,self).__init__()
         self.fc1 = nn.Linear(128, 2048)
+        self.fc2 = nn.Linear(2048, 128)
+        self.relu = nn.ReLU()
+        
+    def forward(self,input):
+        output = self.fc1(input)
+        output = self.relu(output)
+        output = self.fc2(output)
+        output = self.relu(output)
+        return output
+
+class mlpNet1(nn.Module):
+    def __init__(self):
+        super(mlpNet1,self).__init__()
+        self.fc1 = nn.Linear(120000, 2048)
         self.fc2 = nn.Linear(2048, 128)
         self.relu = nn.ReLU()
         
@@ -369,7 +459,7 @@ class gMLP(nn.Module):
         """（中间是否要转化为频域？？）分类器组件
         """
         self.classifier0 = BinaryClassifier(128)
-        self.classifier1 = MultiClassifier(64000, 128)
+        self.classifier1 = MultiClassifier(64000, 128,6)
 
         # init
         for p in self.parameters():
@@ -456,7 +546,84 @@ class gMLP(nn.Module):
             package['tr_loss'] = tr_loss
             package['cv_loss'] = cv_loss
         return package
+        
+        
+class MixStyle(nn.Module):
+    """MixStyle.
+    Reference:
+      Zhou et al. Domain Generalization with MixStyle. ICLR 2021.
+    """
 
+    def __init__(self, p=0.5, alpha=0.1, eps=1e-6, mix='random'):
+        """
+        Args:
+          p (float): probability of using MixStyle.
+          alpha (float): parameter of the Beta distribution.
+          eps (float): scaling parameter to avoid numerical issues.
+          mix (str): how to mix.
+        """
+        super().__init__()
+        self.p = p
+        self.beta = torch.distributions.Beta(alpha, alpha)
+        self.eps = eps
+        self.alpha = alpha
+        self.mix = mix
+        self._activated = True
+
+    def __repr__(self):
+        return f'MixStyle(p={self.p}, alpha={self.alpha}, eps={self.eps}, mix={self.mix})'
+
+    def set_activation_status(self, status=True):
+        self._activated = status
+
+    def update_mix_method(self, mix='random'):
+        self.mix = mix
+
+    def forward(self, x):
+        if not self.training or not self._activated:
+            return x
+
+        if random.random() > self.p:
+            return x
+
+        B = x.size(0)
+
+        mu = x.mean(dim=1, keepdim=True)
+        var = x.var(dim=1, keepdim=True)
+        sig = (var + self.eps).sqrt()
+        mu, sig = mu.detach(), sig.detach()
+        x_normed = (x-mu) / sig
+
+        lmda = self.beta.sample((B, 1, 1, 1))
+        lmda = lmda.to(x.device)
+
+        if self.mix == 'random':
+            # random shuffle
+            perm = torch.randperm(B)
+            #print('perm',perm.shape)
+
+        elif self.mix == 'crossdomain':
+            # split into two halves and swap the order
+            perm = torch.arange(B - 1, -1, -1) # inverse index
+            perm_b, perm_a = perm.chunk(2)
+            perm_b = perm_b[torch.randperm(B // 2)]
+            perm_a = perm_a[torch.randperm(B // 2)]
+            #print('perm_a',perm_a.shape)
+            perm = torch.cat([perm_b, perm_a], 0)
+
+        else:
+            raise NotImplementedError
+
+        mu2, sig2 = mu[perm], sig[perm]
+        mu_mix = mu*lmda + mu2 * (1-lmda)
+        sig_mix = sig*lmda + sig2 * (1-lmda)
+        output = x_normed*sig_mix + mu_mix
+        #print('out.shape',output.shape)
+        output1 = output[0,:,:]
+        output2 = output1.squeeze(dim=0)
+        return output2
+        
+        
 class Encoder(nn.Module):
     """Estimation of the nonnegative mixture weight by a 1-D conv layer.
     """
@@ -725,7 +892,7 @@ class BinaryClassifier(nn.Module):
 
 # define Multiclassifier
 class MultiClassifier(nn.Module):
-    def __init__(self, length, fft_length):
+    def __init__(self, length, fft_length,classNum):
         super(MultiClassifier, self).__init__()
         self.fft_length = fft_length
         self.length = length
@@ -734,8 +901,9 @@ class MultiClassifier(nn.Module):
         # self.fc1 = nn.Linear(fft_length, 256)
         self.fc1 = nn.Linear(fft_length, 1024)
         self.fc2 = nn.Linear(1024, 2048)
-        self.fc3 = nn.Linear(2048, 6)
+        self.fc3 = nn.Linear(2048, classNum)
         self.relu = nn.ReLU()
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         # # 应用第一个全连接层和ReLU激活函数

@@ -20,6 +20,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 from sklearn.metrics import f1_score
+from randconv import randconv
 
 from g_mlp import gMLP,BinaryClassifier
 from g_mlp import mixNet,maskNet
@@ -168,6 +169,8 @@ if __name__ == "__main__":
     with torch.no_grad():
         for data, left_label, right_label in tqdm(test_loader):
             data = data.cuda()
+            image = torch.randn(1, 3, 128)
+            output = randconv(image, 10, False, 1.0)
             left_label = left_label.cuda().float()
             outputs0 = model(data)
             loss = criterion(outputs0, left_label.unsqueeze(1))

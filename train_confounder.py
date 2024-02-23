@@ -22,7 +22,7 @@ from tqdm import tqdm
 from sklearn.metrics import f1_score
 
 from g_mlp import gMLP
-from g_mlp import mixNet,maskNet,confounderNet
+from g_mlp import mixNet,maskNet,confounderNet,end2end_test_B
 from pit_criterion import new_loss,confounder_loss
 from data import MyDataLoader, MyDataset
 from conv_tasnet import TemporalConvNet
@@ -75,16 +75,16 @@ if __name__ == "__main__":
         model = confounderNet(N, B, H, P, X, R, C, 128)
         
     model = model.cuda()
-    checkpoint = torch.load('representer.pth')
-    model.net.mlp1.fc1.weight.data = checkpoint['net.fc1.weight']
-    model.net.mlp1.fc2.weight.data = checkpoint['net.fc2.weight']
+    checkpoint = torch.load('End2End_train_A.pth')
+    model.net.mlp1.fc1.weight.data = checkpoint['representation.fc1.weight']
+    model.net.mlp1.fc2.weight.data = checkpoint['representation.fc2.weight']
     
-    # for param in  model.net.mlp1.fc1.parameters():
-        # param.requires_grad = False
-    # for param in  model.net.mlp1.fc2.parameters():
-        # param.requires_grad = False
+    for param in  model.net.mlp1.fc1.parameters():
+        param.requires_grad = False
+    for param in  model.net.mlp1.fc2.parameters():
+        param.requires_grad = False
     #加载confounder
-    target_path = 'D:\\frequencyProcess\\confounder_dic'
+    target_path = 'D:\\frequencyProcess\\confounder_dic_B'
     all_files = get_file_paths(target_path)
     all_confouders = []
     for file in all_files:
@@ -97,16 +97,16 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=0.00001)
 
     train_dataset = CustomDataset('D:\\frequencyProcess\\D1012\\tr')
-    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
     cv_dataset = CustomDataset('D:\\frequencyProcess\\D1012\\cv')
-    cv_loader = DataLoader(cv_dataset, batch_size=128, shuffle=True)
+    cv_loader = DataLoader(cv_dataset, batch_size=64, shuffle=True)
     #cv_dataset = CustomDataset('D:\\frequencyProcess\\test\\cv\\mix')
     #cv_loader = DataLoader(cv_dataset, batch_size=16, shuffle=True, num_workers=4)
     test_dataset = CustomDataset('D:\\frequencyProcess\\D1012\\tt')
-    test_loader = DataLoader(test_dataset, batch_size=128, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
     
     # 训练模型
-    num_epochs = 400
+    num_epochs = 250
     for epoch in range(num_epochs):
         # 训练模式
         #start_time = time.time()
@@ -311,7 +311,7 @@ if __name__ == "__main__":
         print('tt_accuracy0', tt_accuracy0)
         print('tt_accuracy1', tt_accuracy1)
         print('confounder_accuracy1', tt_accuracy2,flush=True)  
-        torch.save(model.state_dict(), "ConfounderClassifier.pth")
+        torch.save(model.state_dict(), "ConfounderClassifier_B_A.pth")
         print('==========')
        
     

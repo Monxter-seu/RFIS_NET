@@ -18,7 +18,7 @@ from tqdm import tqdm
 from sklearn.metrics import f1_score
 
 from g_mlp import gMLP
-from g_mlp import mixNet,maskNet
+from g_mlp import mixNet,maskNet,end2end_train
 from pit_criterion import new_loss
 from data import MyDataLoader, MyDataset
 from conv_tasnet import TemporalConvNet
@@ -38,9 +38,9 @@ def get_file_paths(aim):
 if __name__ == "__main__":
     M, N, L, T = 16, 1, 20, 12
     B, H, P, X, R, C, norm_type, causal = 128, 32, 3, 8, 1, 2, "gLN", False
-    model = mixNet(N, B, H, P, X, R, C, 128)
+    model = end2end_train(N, B, H, P, X, R, C, 128)
     model = model.cuda()
-    checkpoint = torch.load('confounder.pth')
+    checkpoint = torch.load('End2End_train.pth')
     model.load_state_dict(checkpoint)
     model.eval()
     all_files = get_file_paths(target_path)
