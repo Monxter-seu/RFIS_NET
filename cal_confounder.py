@@ -25,7 +25,7 @@ from conv_tasnet import TemporalConvNet
 from customLoader import CustomDataset
 from torch.utils.data import Dataset, DataLoader
 
-target_path = 'D:\\frequencyProcess\\confounder\\port4'
+target_path = 'D:\\frequencyProcess\\device_partition2\\confounder\\port4'
 
 def get_file_paths(aim):
         file_paths = []

@@ -29,7 +29,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
 
-from g_mlp import gMLP,BinaryClassifier,testMixNet,MultiClassifier
+from g_mlp import BinaryClassifier,testMixNet,MultiClassifier
 from g_mlp import mixNet,maskNet,testLSTMNet,end2end_test_B
 from pit_criterion import new_loss
 from data import MyDataLoader, MyDataset

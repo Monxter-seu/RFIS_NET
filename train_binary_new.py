@@ -25,7 +25,7 @@ from randconv import randconv
 from sklearn.metrics import cohen_kappa_score
 from sklearn.metrics import matthews_corrcoef
 
-from g_mlp import gMLP,BinaryClassifier,testMixNet,MultiClassifier
+from g_mlp import BinaryClassifier,testMixNet,MultiClassifier
 from g_mlp import mixNet,maskNet,testLSTMNet
 from pit_criterion import new_loss
 from data import MyDataLoader, MyDataset
@@ -70,9 +70,9 @@ if __name__ == "__main__":
     if net_type == 'mask':
         model = maskNet(N, B, H, P, X, R, C, 128)
     else:
-        model = MultiClassifier(0,128,10)
+        #model = MultiClassifier(0,128,10)
         # model = testMixNet()
-        # model = testLSTMNet()
+        model = testLSTMNet()
         
     model = model.cuda()
     best_accuracy = 0.0
@@ -81,19 +81,19 @@ if __name__ == "__main__":
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.00001)
 
-    train_dataset = SimpleMultiDataset('D:\\frequencyProcess\\expMulti_10T\\tr')
+    train_dataset = SimpleMultiDataset('D:\\frequencyProcess\\device_partition2\\expMulti3\\tr')
     #train_dataset = CustomDataset('D:\\frequencyProcess\\testNewBiOneDay\\tr')
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
     #cv_dataset = CustomDataset('D:\\frequencyProcess\\D10\\cv')
     #cv_loader = DataLoader(cv_dataset, batch_size=16, shuffle=True, num_workers=2)
-    cv_dataset = SimpleMultiDataset('D:\\frequencyProcess\\expMulti_10T\\cv')
+    cv_dataset = SimpleMultiDataset('D:\\frequencyProcess\\device_partition2\\expMulti3\\cv')
     cv_loader = DataLoader(cv_dataset, batch_size=32, shuffle=True)
-    test_dataset = SimpleMultiDataset('D:\\frequencyProcess\\expMulti_10T\\tt')
+    test_dataset = SimpleMultiDataset('D:\\frequencyProcess\\device_partition2\\expMulti3\\tt')
     #test_dataset = CustomDataset('D:\\frequencyProcess\\testNewBiOneDay\\tt')
     test_loader = DataLoader(test_dataset, batch_size=32, shuffle=True)
     
     # 训练模型
-    num_epochs = 300
+    num_epochs = 200
     for epoch in range(num_epochs):
         # 训练模式
         #start_time = time.time()
@@ -110,11 +110,11 @@ if __name__ == "__main__":
             data = data.cuda()
             
             #rbstest
-            chunks = torch.chunk(data, 4, dim=1)
-            data = torch.cat([chunks[i] for i in torch.randperm(4)], dim=1)
+            #chunks = torch.chunk(data, 4, dim=1)
+            #data = torch.cat([chunks[i] for i in torch.randperm(4)], dim=1)
             
             #randconv
-            # data = randconv(data, 5, False, 1.0)
+            #data = randconv(data, 5, False, 1.0)
             
             left_label = left_label.long().cuda()
             

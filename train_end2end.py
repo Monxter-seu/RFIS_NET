@@ -21,7 +21,6 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 from sklearn.metrics import f1_score
 
-from g_mlp import gMLP
 from g_mlp import mixNet,maskNet,confounderNet,end2end_train
 from pit_criterion import new_loss,confounder_loss,end2end_train_loss
 from data import MyDataLoader, MyDataset

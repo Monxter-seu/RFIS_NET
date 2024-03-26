@@ -1,0 +1,11 @@
+GPUtil==1.4.0
+librosa==0.7.2
+matplotlib==3.5.3
+mir_eval==0.6
+numpy==1.21.6
+psutil==5.4.7
+scikit_learn==1.0.2
+torch==1.11.0
+torchviz==0.0.2
+tqdm==4.64.0
+visdom==0.1.8.9

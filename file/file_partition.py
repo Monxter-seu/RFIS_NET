@@ -61,7 +61,7 @@ main_file_num = 700
 day_subfolders = [f.path for f in os.scandir(source_folder) if f.is_dir() and f.name != source_folder]
 device_dic = ['pi06', 'rh01', 'rh02', 'rh03', 'tp47', 'tp49', 'tp50', 'wy00', 'wy01', 'wy02']
 port_dic = [1,2,3,4]
-export_folder = 'D:\\frequencyProcess\\Multi_10T'
+export_folder = 'D:\\frequencyProcess\\Multi_device_partition_2'
 
 tr_dir = os.path.join(export_folder, 'tr')
 tt_dir = os.path.join(export_folder, 'tt')

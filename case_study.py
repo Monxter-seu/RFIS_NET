@@ -20,7 +20,6 @@ from sklearn.metrics import f1_score
 
 from sklearn.metrics import cohen_kappa_score
 
-from g_mlp import gMLP
 from g_mlp import mixNet,maskNet,confounderNet,end2end_train,end2end_test_B
 from pit_criterion import new_loss,confounder_loss,end2end_train_loss,end2end_test_loss
 from data import MyDataLoader, MyDataset
